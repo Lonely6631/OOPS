@@ -112,6 +112,13 @@ void App::Update() {
     
     glm::vec2 mousePos = Util::Input::GetCursorPosition();
 
+    if (!m_IsDragging && Util::Input::IsKeyDown(Util::Keycode::MOUSE_RB)) {
+        int r, c;
+        if (GetGridIndex(mousePos, r, c) && m_Board[r][c] != nullptr) {
+            m_Board[r][c] = nullptr; 
+        }
+    }
+
     if (!m_IsDragging && (Util::Input::IsKeyDown(Util::Keycode::MOUSE_LB) || Util::Input::IsKeyPressed(Util::Keycode::MOUSE_LB))) {
         int r, c;
         if (GetGridIndex(mousePos, r, c) && m_Board[r][c] != nullptr) {
@@ -173,23 +180,27 @@ void App::Update() {
         }
     }
 
-    // 🌟 最關鍵的子彈彈跳判定
     for (auto it = m_Bullets.begin(); it != m_Bullets.end(); ) {
         (*it)->Update();
         if ((*it)->IsInvalid()) {
             it = m_Bullets.erase(it); 
         } else if ((*it)->IsHit()) {
-            // 1. 打中怪物，扣血
-            (*it)->GetTarget()->ReceiveDamage((*it)->GetDamage()); 
+            auto target = (*it)->GetTarget();
+            target->ReceiveDamage((*it)->GetDamage()); 
 
-            // 2. 判斷是否有剩餘彈跳次數
+            if ((*it)->IsIce()) {
+                target->ApplyIceEffect();
+            }
+            
+            // 🌟 命中時如果是毒子彈，就讓怪物中毒！
+            if ((*it)->IsPoison()) {
+                target->ApplyPoisonEffect();
+            }
+
             if ((*it)->GetBouncesLeft() > 0) {
-                (*it)->DecreaseBounce(); // 扣除一次額度
-                
+                (*it)->DecreaseBounce(); 
                 std::shared_ptr<Monster> nextTarget = nullptr;
                 float minDistance = 999999.0f;
-
-                // 找尋離「被擊中怪物」最近的其他怪物
                 for (auto& monster : m_Monsters) {
                     if (!monster->IsDead() && monster != (*it)->GetTarget()) {
                         float dist = glm::length(monster->GetPos() - (*it)->GetTarget()->GetPos());
@@ -199,17 +210,13 @@ void App::Update() {
                         }
                     }
                 }
-
                 if (nextTarget) {
-                    // 有找到下一個受害者，切換目標！子彈不消失，繼續飛！
                     (*it)->SetTarget(nextTarget);
                     ++it; 
                 } else {
-                    // 場上沒別的怪了，子彈只好消失
                     it = m_Bullets.erase(it); 
                 }
             } else {
-                // 彈跳次數用完，子彈消失
                 it = m_Bullets.erase(it); 
             }
         } else {

@@ -9,8 +9,9 @@
 
 class Bullet {
 public:
-    Bullet(const std::string& imagePath, glm::vec2 pos, std::shared_ptr<Monster> target, float speed, int damage, float size = 20.0f, int bounces = 0)
-        : m_Pos(pos), m_Target(target), m_Speed(speed), m_BaseDamage(damage), m_Damage(damage), m_Size(size), m_MaxBounces(bounces), m_BouncesLeft(bounces) {
+    // 🌟 新增 isPoison 參數
+    Bullet(const std::string& imagePath, glm::vec2 pos, std::shared_ptr<Monster> target, float speed, int damage, float size = 20.0f, int bounces = 0, bool isIce = false, bool isPoison = false)
+        : m_Pos(pos), m_Target(target), m_Speed(speed), m_BaseDamage(damage), m_Damage(damage), m_Size(size), m_MaxBounces(bounces), m_BouncesLeft(bounces), m_IsIce(isIce), m_IsPoison(isPoison) {
         m_Image = std::make_shared<Util::Image>(imagePath);
     }
 
@@ -45,19 +46,17 @@ public:
 
     std::shared_ptr<Monster> GetTarget() const { return m_Target; }
     int GetDamage() const { return m_Damage; }
-
     int GetBouncesLeft() const { return m_BouncesLeft; }
+    bool IsIce() const { return m_IsIce; } 
+    bool IsPoison() const { return m_IsPoison; } // 🌟 取得是否為毒屬性
     
-    // 🌟 修正：彈跳時根據次數衰減傷害！
     void DecreaseBounce() { 
         m_BouncesLeft--; 
-        
-        // 針對電骰子設定的 2 次彈跳 (共打 3 隻) 進行 100% -> 70% -> 30% 衰減
         if (m_MaxBounces == 2) {
             if (m_BouncesLeft == 1) {
-                m_Damage = static_cast<int>(m_BaseDamage * 0.7f); // 第 2 下：70%
+                m_Damage = static_cast<int>(m_BaseDamage * 0.7f); 
             } else if (m_BouncesLeft == 0) {
-                m_Damage = static_cast<int>(m_BaseDamage * 0.3f); // 第 3 下：30%
+                m_Damage = static_cast<int>(m_BaseDamage * 0.3f); 
             }
         }
     }
@@ -69,13 +68,13 @@ private:
     glm::vec2 m_Pos;
     std::shared_ptr<Monster> m_Target;
     float m_Speed;
-    
-    // 🌟 新增原始傷害變數來幫助計算倍率
     int m_BaseDamage; 
     int m_Damage;     
     float m_Size; 
     int m_MaxBounces; 
     int m_BouncesLeft; 
+    bool m_IsIce; 
+    bool m_IsPoison; // 🌟 紀錄毒屬性
 };
 
 #endif
