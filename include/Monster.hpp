@@ -3,15 +3,18 @@
 
 #include "Util/Image.hpp"
 #include "Util/Transform.hpp"
+#include "Util/Text.hpp"
+#include "Util/Color.hpp"
 #include <memory>
 #include <string>
 #include <vector>
 
 class Monster {
 public:
-    Monster(const std::string& imagePath, std::vector<glm::vec2> waypoints, float speed, int hp = 10) 
+    Monster(const std::string& imagePath, std::vector<glm::vec2> waypoints, float speed, int hp) 
         : m_Waypoints(waypoints), m_Speed(speed), m_Hp(hp) {
         m_Image = std::make_shared<Util::Image>(imagePath);
+        m_HpText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 15, std::to_string(m_Hp), Util::Color::FromName(Util::Colors::WHITE));
         
         if (!m_Waypoints.empty()) {
             m_Pos = m_Waypoints[0];
@@ -23,7 +26,7 @@ public:
     }
 
     void Update() {
-        if (m_Waypoints.empty() || m_CurrentWaypointIndex >= m_Waypoints.size()) return;
+        if (m_Waypoints.empty() || m_CurrentWaypointIndex >= m_Waypoints.size() || IsDead()) return;
 
         glm::vec2 targetPos = m_Waypoints[m_CurrentWaypointIndex];
         glm::vec2 direction = targetPos - m_Pos;
@@ -38,34 +41,42 @@ public:
     }
 
     void Draw(const glm::mat4& projection) {
-        if (!m_Image) return;
+        if (!m_Image || IsDead()) return; // 死了就不畫
 
         Core::Matrices data;
-        glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(m_Pos, 0.6f)); 
-        model = glm::scale(model, glm::vec3(100.0f, 100.0f, 1.0f)); 
-        
-        data.m_Model = model;
+        data.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(m_Pos, 0.6f)), glm::vec3(100.0f, 100.0f, 1.0f)); 
         data.m_Projection = projection;
         m_Image->Draw(data);
+
+        if (m_HpText) {
+            m_HpText->SetText(std::to_string(m_Hp)); 
+            glm::vec2 textSize = m_HpText->GetSize();
+            glm::vec2 offset(7.5f, 0.0f); 
+            glm::vec2 finalPos = m_Pos + offset;
+
+            Core::Matrices textData;
+            textData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(finalPos, 0.7f)), glm::vec3(textSize, 1.0f));
+            textData.m_Projection = projection;
+            m_HpText->Draw(textData);
+        }
     }
+
+    // 🌟 新增受傷與死亡判定
+    void ReceiveDamage(int damage) { m_Hp -= damage; }
+    bool IsDead() const { return m_Hp <= 0; }
+    bool IsFinished() const { return !m_Waypoints.empty() && m_CurrentWaypointIndex >= m_Waypoints.size(); }
 
     glm::vec2 GetPos() const { return m_Pos; }
     int GetHp() const { return m_Hp; }
 
-    // 判斷是否已經走完所有路徑點
-    bool IsFinished() const {
-        // 如果路徑點有東西，而且目前的索引已經超出陣列大小，代表走完了
-        return !m_Waypoints.empty() && m_CurrentWaypointIndex >= m_Waypoints.size();
-    }
-
 private:
     std::shared_ptr<Util::Image> m_Image;
-    glm::vec2 m_Pos;
-    float m_Speed; 
-    int m_Hp;      
-    
+    std::shared_ptr<Util::Text> m_HpText;
     std::vector<glm::vec2> m_Waypoints;
-    size_t m_CurrentWaypointIndex;     
+    glm::vec2 m_Pos;
+    float m_Speed;
+    int m_Hp;
+    size_t m_CurrentWaypointIndex;
 };
 
 #endif
