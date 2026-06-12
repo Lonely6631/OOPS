@@ -50,8 +50,12 @@ public:
     bool IsIce() const { return m_IsIce; } 
     bool IsPoison() const { return m_IsPoison; } // 🌟 取得是否為毒屬性
     
+    // 🌟 新增這行：允許外部修改子彈傷害 (用來處理電骰升級後的彈射傷害)
+    void SetDamage(int damage) { m_Damage = damage; }
+    
     void DecreaseBounce() { 
         m_BouncesLeft--; 
+        // 處理預設的衰減邏輯，但如果在 App.cpp 有用 SetDamage，就會被覆蓋
         if (m_MaxBounces == 2) {
             if (m_BouncesLeft == 1) {
                 m_Damage = static_cast<int>(m_BaseDamage * 0.7f); 

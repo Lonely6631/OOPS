@@ -1,5 +1,4 @@
 #include "App.hpp"
-
 #include "Core/Context.hpp"
 
 int main(int, char**) {
@@ -10,6 +9,14 @@ int main(int, char**) {
         switch (app.GetCurrentState()) {
             case App::State::START:
                 app.Start();
+                break;
+
+            case App::State::MENU: // 新增對選單狀態的處理
+                app.Menu();
+                break;
+
+            case App::State::BACKPACK: // 新增 BACKPACK 狀態的處理
+                app.Backpack();
                 break;
 
             case App::State::UPDATE:

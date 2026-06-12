@@ -40,6 +40,9 @@ public:
     data.m_Projection = projection;
 
     m_Image->Draw(data);
+
+    
+
 }
 
 private:

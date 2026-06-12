@@ -15,8 +15,10 @@ enum class DiceType { Ice, Poison, Wind, Electric, Iron };
 
 class Dice {
 public:
+    static constexpr float MIN_COOLDOWN = 0.01f;
+
     Dice(DiceType type, const std::string& imagePath, glm::vec2 pos) 
-        : m_Type(type), m_Pos(pos), m_Level(1) {
+        : m_Type(type), m_Pos(pos), m_StarLevel(1), m_PowerUpLevel(1) {
         m_Image = std::make_shared<Util::Image>(imagePath);
     }
     virtual ~Dice() = default; 
@@ -37,18 +39,19 @@ public:
     void SetPos(glm::vec2 pos) { m_Pos = pos; } 
 
     DiceType GetType() const { return m_Type; }
-    int GetLevel() const { return m_Level; }
+    int GetStarLevel() const { return m_StarLevel; }
+    int GetPowerUpLevel() const { return m_PowerUpLevel; }
 
-    virtual void Upgrade() {
-        m_Level++;
-    }
+    virtual void UpgradeStar() { m_StarLevel++; }
+    virtual void PowerUp() { m_PowerUpLevel++; }
 
 protected:
     std::shared_ptr<Util::Image> m_Image;
     glm::vec2 m_Pos;
     float m_CooldownTimer = 0.0f; 
     DiceType m_Type; 
-    int m_Level;     
+    int m_StarLevel;     
+    int m_PowerUpLevel;  
 
     std::shared_ptr<Monster> FindFrontMostMonster(const std::vector<std::shared_ptr<Monster>>& monsters) {
         std::shared_ptr<Monster> target = nullptr;
@@ -70,7 +73,6 @@ protected:
         return target;
     }
 
-    // 🌟 新增：尋找「未中毒」的最前方怪物 (毒骰專用)
     std::shared_ptr<Monster> FindUnpoisonedFrontMostMonster(const std::vector<std::shared_ptr<Monster>>& monsters) {
         std::shared_ptr<Monster> target = nullptr;
         std::shared_ptr<Monster> fallback = nullptr;
@@ -81,14 +83,10 @@ protected:
             if (!monster->IsDead()) {
                 int wpIdx = static_cast<int>(monster->GetWaypointIndex());
                 float dist = monster->GetDistanceToNextWaypoint();
-
-                // 備用方案：記錄最前面的怪 (防止全場都中毒時骰子發呆)
                 if (wpIdx > fbMaxWp || (wpIdx == fbMaxWp && dist < fbMinDist)) {
                     fbMaxWp = wpIdx; fbMinDist = dist;
                     fallback = monster;
                 }
-
-                // 優先目標：尋找「沒有中毒」且最前面的怪
                 if (!monster->IsPoisoned()) {
                     if (wpIdx > maxWp || (wpIdx == maxWp && dist < minDist)) {
                         maxWp = wpIdx; minDist = dist;
@@ -105,14 +103,16 @@ class IronDice : public Dice {
 public:
     IronDice(glm::vec2 pos) : Dice(DiceType::Iron, RESOURCE_DIR "/Iron/Iron_Dice.png", pos) {}
     
-    void Upgrade() override {
-        Dice::Upgrade(); 
-        if (m_Level == 2) m_Image = std::make_shared<Util::Image>(RESOURCE_DIR "/Iron/Iron_Dice_2.png");
+    void UpgradeStar() override {
+        Dice::UpgradeStar(); 
+        if (m_StarLevel <= 7) {
+            std::string suffix = (m_StarLevel == 1) ? "" : "_" + std::to_string(m_StarLevel);
+            m_Image = std::make_shared<Util::Image>(RESOURCE_DIR "/Iron/Iron_Dice" + suffix + ".png");
+        }
     }
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
         Dice::Update(monsters, bullets); 
-        
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
             std::shared_ptr<Monster> target = nullptr;
             int maxHp = -1;
@@ -123,8 +123,9 @@ public:
                 }
             }
             if (target) {
-                bullets.push_back(std::make_shared<Bullet>(RESOURCE_DIR "/Iron/Iron_Bullet.png", m_Pos, target, 20.0f, 100, 40.0f));
-                m_CooldownTimer = std::max(0.01f, 1.0f / m_Level); 
+                int damage = 100 + (m_PowerUpLevel - 1) * 100;
+                bullets.push_back(std::make_shared<Bullet>(RESOURCE_DIR "/Iron/Iron_Bullet.png", m_Pos, target, 10.0f, damage, 40.0f));
+                m_CooldownTimer = std::max(MIN_COOLDOWN, 1.0f / m_StarLevel); 
             }
         }
     }
@@ -134,22 +135,29 @@ class ElectricDice : public Dice {
 public:
     ElectricDice(glm::vec2 pos) : Dice(DiceType::Electric, RESOURCE_DIR "/Electric/Electric_Dice.png", pos) {}
 
-    void Upgrade() override {
-        Dice::Upgrade(); 
-        if (m_Level == 2) m_Image = std::make_shared<Util::Image>(RESOURCE_DIR "/Electric/Electric_Dice_2.png");
+    void UpgradeStar() override {
+        Dice::UpgradeStar(); 
+        if (m_StarLevel <= 7) {
+            std::string suffix = (m_StarLevel == 1) ? "" : "_" + std::to_string(m_StarLevel);
+            m_Image = std::make_shared<Util::Image>(RESOURCE_DIR "/Electric/Electric_Dice" + suffix + ".png");
+        }
     }
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
         Dice::Update(monsters, bullets); 
-        
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
             std::shared_ptr<Monster> target = FindFrontMostMonster(monsters);
             if (target) {
+                // 🌟 電骰：第一發 = 100% 基礎(30) + 100% 彈射(30)
+                int baseDmg = 30 + (m_PowerUpLevel - 1) * 10;
+                int bounceBase = 30 + (m_PowerUpLevel - 1) * 20;
+                int initialTotalDmg = baseDmg + bounceBase;
+
                 bullets.push_back(std::make_shared<Bullet>(
                     RESOURCE_DIR "/Electric/Electric_Bullet.png", 
-                    m_Pos, target, 20.0f, 40, 40.0f, 2 
+                    m_Pos, target, 10.0f, initialTotalDmg, 40.0f, 2 
                 ));
-                m_CooldownTimer = std::max(0.01f, 0.7f / m_Level); 
+                m_CooldownTimer = std::max(MIN_COOLDOWN, 0.7f / m_StarLevel); 
             }
         }
     }
@@ -159,73 +167,81 @@ class IceDice : public Dice {
 public:
     IceDice(glm::vec2 pos) : Dice(DiceType::Ice, RESOURCE_DIR "/Ice/Ice_Dice.png", pos) {}
 
-    void Upgrade() override {
-        Dice::Upgrade(); 
+    void UpgradeStar() override {
+        Dice::UpgradeStar(); 
+        if (m_StarLevel <= 7) {
+            std::string suffix = (m_StarLevel == 1) ? "" : "_" + std::to_string(m_StarLevel);
+            m_Image = std::make_shared<Util::Image>(RESOURCE_DIR "/Ice/Ice_Dice" + suffix + ".png");
+        }
     }
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
         Dice::Update(monsters, bullets); 
-        
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
             std::shared_ptr<Monster> target = FindFrontMostMonster(monsters);
             if (target) {
+                int damage = 30 + (m_PowerUpLevel - 1) * 30;
                 bullets.push_back(std::make_shared<Bullet>(
-                    RESOURCE_DIR "/Ice/Ice_Bullet.png", m_Pos, target, 20.0f, 30, 40.0f, 0, true 
+                    RESOURCE_DIR "/Ice/Ice_Bullet.png", m_Pos, target, 10.0f, damage, 40.0f, 0, true 
                 ));
-                m_CooldownTimer = std::max(0.01f, 1.5f / m_Level); 
+                m_CooldownTimer = std::max(MIN_COOLDOWN, 1.5f / m_StarLevel); 
             }
         }
     }
 };
 
-// 🌟 實作：毒骰 (PoisonDice)
 class PoisonDice : public Dice {
 public:
     PoisonDice(glm::vec2 pos) : Dice(DiceType::Poison, RESOURCE_DIR "/Poison/Poison_Dice.png", pos) {}
 
-    void Upgrade() override {
-        Dice::Upgrade(); 
+    void UpgradeStar() override {
+        Dice::UpgradeStar(); 
+        if (m_StarLevel <= 7) {
+            std::string suffix = (m_StarLevel == 1) ? "" : "_" + std::to_string(m_StarLevel);
+            m_Image = std::make_shared<Util::Image>(RESOURCE_DIR "/Poison/Poison_Dice" + suffix + ".png");
+        }
     }
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
         Dice::Update(monsters, bullets); 
-        
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
-            // 使用專屬的索敵邏輯：優先找沒中毒的怪
             std::shared_ptr<Monster> target = FindUnpoisonedFrontMostMonster(monsters);
-
             if (target) {
-                // 發射毒子彈 (倒數第二個 false 是 isIce，最後一個 true 是 isPoison)
+                int damage = 20 + (m_PowerUpLevel - 1) * 10;
                 bullets.push_back(std::make_shared<Bullet>(
-                    RESOURCE_DIR "/Poison/Poison_Bullet.png", m_Pos, target, 20.0f, 20, 40.0f, 0, false, true 
+                    RESOURCE_DIR "/Poison/Poison_Bullet.png", m_Pos, target, 10.0f, damage, 40.0f, 0, false, true 
                 ));
-                m_CooldownTimer = std::max(0.01f, 1.3f / m_Level); 
+                m_CooldownTimer = std::max(MIN_COOLDOWN, 1.3f / m_StarLevel); 
             }
         }
     }
 };
 
-// 🌟 實作：風骰 (WindDice)
 class WindDice : public Dice {
 public:
     WindDice(glm::vec2 pos) : Dice(DiceType::Wind, RESOURCE_DIR "/Wind/Wind_Dice.png", pos) {}
 
-    void Upgrade() override {
-        Dice::Upgrade(); 
+    void UpgradeStar() override {
+        Dice::UpgradeStar(); 
+        if (m_StarLevel <= 7) {
+            std::string suffix = (m_StarLevel == 1) ? "" : "_" + std::to_string(m_StarLevel);
+            m_Image = std::make_shared<Util::Image>(RESOURCE_DIR "/Wind/Wind_Dice" + suffix + ".png");
+        }
     }
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
         Dice::Update(monsters, bullets); 
-        
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
             std::shared_ptr<Monster> target = FindFrontMostMonster(monsters);
-
             if (target) {
+                int damage = 20 + (m_PowerUpLevel - 1) * 15;
                 bullets.push_back(std::make_shared<Bullet>(
-                    RESOURCE_DIR "/Wind/Wind_Bullet.png", m_Pos, target, 20.0f, 40, 40.0f, 0 
+                    RESOURCE_DIR "/Wind/Wind_Bullet.png", m_Pos, target, 10.0f, damage, 40.0f, 0 
                 ));
-                // 攻速 0.45s，並自帶 10% 攻速增加特性 (乘上 0.9 縮短冷卻)
-                m_CooldownTimer = std::max(0.01f, (0.45f * 0.9f) / m_Level); 
+                
+                float speedMultiplier = 1.0f + (m_PowerUpLevel - 1) * 0.10f;
+                float baseCooldown = 0.405f / speedMultiplier; 
+                m_CooldownTimer = std::max(MIN_COOLDOWN, baseCooldown / m_StarLevel); 
             }
         }
     }

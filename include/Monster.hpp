@@ -13,8 +13,8 @@
 
 class Monster {
 public:
-    Monster(const std::string& imagePath, std::vector<glm::vec2> waypoints, float speed, int hp) 
-        : m_Waypoints(waypoints), m_OriginalSpeed(speed), m_CurrentSpeed(speed), m_Hp(hp) {
+    Monster(const std::string& imagePath, std::vector<glm::vec2> waypoints, float speed, int hp, int spReward = 0) 
+        : m_Waypoints(waypoints), m_OriginalSpeed(speed), m_CurrentSpeed(speed), m_Hp(hp), m_SpReward(spReward) {
         m_Image = std::make_shared<Util::Image>(imagePath);
         m_HpText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 15, std::to_string(m_Hp), Util::Color::FromName(Util::Colors::WHITE));
         
@@ -30,15 +30,18 @@ public:
         }
     }
 
+    void SetSize(glm::vec2 size) { m_Size = size; }
+
     void Update() {
         if (m_Waypoints.empty() || m_CurrentWaypointIndex >= m_Waypoints.size() || IsDead()) return;
 
         float deltaTime = static_cast<float>(Util::Time::GetDeltaTimeMs()) / 1000.0f;
         
+        // 🌟 使用動態的中毒傷害
         if (m_IsPoisoned) {
             m_PoisonTickTimer -= deltaTime;
             if (m_PoisonTickTimer <= 0.0f) {
-                ReceiveDamage(50); 
+                ReceiveDamage(m_PoisonDamage); 
                 m_PoisonTickTimer += 1.0f; 
             }
         }
@@ -66,17 +69,15 @@ public:
     void Draw(const glm::mat4& projection) {
         if (!m_Image || IsDead()) return; 
 
-        // 1. 畫怪物本體 (Z=0.6)
         Core::Matrices data;
-        data.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(m_Pos, 0.6f)), glm::vec3(100.0f, 100.0f, 1.0f)); 
+        data.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(m_Pos, 0.6f)), glm::vec3(m_Size, 1.0f)); 
         data.m_Projection = projection;
         m_Image->Draw(data);
 
-        // 2. 畫冰凍特效 (Z=0.75)
         if (m_IceEffectTimer > 0 && m_IceSnowImage) {
             Core::Matrices snowData;
             glm::vec2 snowPos = m_Pos + glm::vec2(0.0f, 15.5f); 
-            snowData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(snowPos, 0.75f)), glm::vec3(37.0f, 50.0f, 1.0f));
+            snowData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(snowPos, 0.75f)), glm::vec3(37.0f, 60.0f, 1.0f));
             snowData.m_Projection = projection;
             m_IceSnowImage->Draw(snowData);
         }
@@ -84,19 +85,15 @@ public:
         if (m_HpText) {
             m_HpText->SetText(std::to_string(m_Hp)); 
             glm::vec2 textSize = m_HpText->GetSize();
-            // 血量位置稍微往右偏移一點點比較美觀
             glm::vec2 hpPos = m_Pos + glm::vec2(7.5f, 0.0f);
 
-            // 3. 🌟 畫中毒狀態 UI (先畫圖示當底，座標與血量完全重疊，Z=0.65 介於怪物與文字之間)
             if (m_IsPoisoned && m_PoisonUI) {
                 Core::Matrices poisonData;
-                // 大小設為 40x40 以便包覆文字
-                poisonData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(hpPos, 0.65f)), glm::vec3(40.0f, 40.0f, 1.0f));
+                poisonData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(hpPos - glm::vec2(7.5f, 0.0f), 0.65f)), glm::vec3(70.0f, 70.0f, 1.0f));
                 poisonData.m_Projection = projection;
                 m_PoisonUI->Draw(poisonData);
             }
 
-            // 4. 畫血量文字 (最後畫，確保在最上面，Z=0.7)
             Core::Matrices textData;
             textData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(hpPos, 0.7f)), glm::vec3(textSize, 1.0f));
             textData.m_Projection = projection;
@@ -107,23 +104,28 @@ public:
     void UpdateSpeed() {
         float speedMultiplier = 1.0f;
         if (m_IceEffectTimer > 0) {
-            speedMultiplier -= (m_IceStack * 0.05f);
+            // 🌟 根據傳入的減速比例計算
+            speedMultiplier -= (m_IceStack * m_CurrentSlowRate);
         }
-        speedMultiplier = std::max(0.5f, speedMultiplier);
+        speedMultiplier = std::max(0.2f, speedMultiplier); // 避免完全定格，最低保底 20% 速度
         m_CurrentSpeed = m_OriginalSpeed * speedMultiplier;
     }
 
-    void ApplyIceEffect() {
+    // 🌟 接收外部傳入的減速比例
+    void ApplyIceEffect(float slowRate) {
         if (m_IceStack < 3) m_IceStack++;
         m_IceEffectTimer = 2.0f; 
+        m_CurrentSlowRate = slowRate; 
         UpdateSpeed(); 
     }
 
-    void ApplyPoisonEffect() {
+    // 🌟 接收外部傳入的中毒傷害
+    void ApplyPoisonEffect(int poisonDamage) {
         if (!m_IsPoisoned) {
             m_IsPoisoned = true;
             m_PoisonTickTimer = 1.0f; 
         }
+        m_PoisonDamage = poisonDamage; 
     }
 
     void ReceiveDamage(int damage) { m_Hp -= damage; }
@@ -140,6 +142,8 @@ public:
     
     bool IsPoisoned() const { return m_IsPoisoned; }
 
+    int GetSpReward() const { return m_SpReward; }
+
 private:
     std::shared_ptr<Util::Image> m_Image;
     std::shared_ptr<Util::Image> m_IceSnowImage; 
@@ -151,12 +155,16 @@ private:
     float m_CurrentSpeed;  
     int m_Hp;
     size_t m_CurrentWaypointIndex;
+    int m_SpReward;
+    glm::vec2 m_Size = glm::vec2(100.0f, 100.0f);
     
     float m_IceEffectTimer = 0.0f; 
     int m_IceStack = 0; 
+    float m_CurrentSlowRate = 0.05f; // 預設每層 5%
 
     bool m_IsPoisoned = false;
     float m_PoisonTickTimer = 0.0f;
+    int m_PoisonDamage = 50; // 預設中毒傷害
 };
 
 #endif
