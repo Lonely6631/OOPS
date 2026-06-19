@@ -41,7 +41,7 @@ public:
     }
 
     bool IsInvalid() const {
-        return !m_Target || m_Target->IsDead();
+        return !m_Target || m_Target->IsDead() || m_Target->IsFinished();
     }
 
     std::shared_ptr<Monster> GetTarget() const { return m_Target; }
@@ -55,14 +55,6 @@ public:
     
     void DecreaseBounce() { 
         m_BouncesLeft--; 
-        // 處理預設的衰減邏輯，但如果在 App.cpp 有用 SetDamage，就會被覆蓋
-        if (m_MaxBounces == 2) {
-            if (m_BouncesLeft == 1) {
-                m_Damage = static_cast<int>(m_BaseDamage * 0.7f); 
-            } else if (m_BouncesLeft == 0) {
-                m_Damage = static_cast<int>(m_BaseDamage * 0.3f); 
-            }
-        }
     }
     
     void SetTarget(std::shared_ptr<Monster> newTarget) { m_Target = newTarget; }

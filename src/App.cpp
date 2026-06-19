@@ -6,11 +6,24 @@
 #include <ctime>
 #include <numeric> 
 #include <cmath> 
+#include <random>
 
 void App::Start() {
     // 初始僅載入選單資源
     m_MainMenuImage = std::make_shared<Util::Image>(RESOURCE_DIR "/Main.png");
     m_BackpackImage = std::make_shared<Util::Image>(RESOURCE_DIR "/Backpack/Backpack.png");
+    m_GameOverImage = std::make_shared<Util::Image>(RESOURCE_DIR "/game_ending.png");
+    m_ChestBgImage = std::make_shared<Util::Image>(RESOURCE_DIR "/Treasure chest/chest.png");
+    m_OpenBgImage = std::make_shared<Util::Image>(RESOURCE_DIR "/Treasure chest/open.png");
+    m_ChestCardText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 20, "0/40", Util::Color::FromName(Util::Colors::WHITE));
+    m_ChestCountText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 25, "0", Util::Color::FromName(Util::Colors::WHITE));
+
+    m_OrdinaryTagImage = std::make_shared<Util::Image>(RESOURCE_DIR "/Treasure chest/Ordinary_dice.png");
+    m_OpenDiceNameText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 18, "Name", Util::Color::FromName(Util::Colors::WHITE));
+    m_OpenDiceCountText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 22, "x100", Util::Color::FromName(Util::Colors::WHITE));
+    m_OpenGemText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 25, "3", Util::Color::FromName(Util::Colors::WHITE));
+    m_OpenGoldText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 25, "2000", Util::Color::FromName(Util::Colors::WHITE));
+    m_OpenCardText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 20, "0 / 40", Util::Color::FromName(Util::Colors::WHITE));
 
     // ===== 新增：載入底框與骰子圖示 =====
     m_FrameOrdinary = std::make_shared<Util::Image>(RESOURCE_DIR "/Backpack/Ordinary.png");
@@ -42,7 +55,12 @@ void App::Start() {
 
     m_CritDmgText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 25, "2000%", Util::Color::FromName(Util::Colors::ORANGE)); 
     m_CritRateText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 25, "5%", Util::Color::FromName(Util::Colors::WHITE));
-
+    m_GameOverWaveText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 55, "WAVE 1", Util::Color::FromName(Util::Colors::WHITE));
+    m_GameOverCardText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 25, "+10", Util::Color::FromName(Util::Colors::WHITE));
+    
+    m_GemText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 30, std::to_string(m_GemCount), Util::Color::FromName(Util::Colors::WHITE));
+    m_GoldText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 30, std::to_string(m_GoldCount), Util::Color::FromName(Util::Colors::WHITE));
+    
     m_CurrentState = State::MENU;
 }
 
@@ -96,6 +114,37 @@ void App::Menu() {
             mousePos.y > backpackBtnMinY && mousePos.y < backpackBtnMaxY) {
             m_CurrentState = State::BACKPACK; // 切換到背包狀態
         }
+    
+        float chestBtnMinX = 37.0f;  float chestBtnMaxX = 127.0f;
+        float chestBtnMinY = 74.0f;  float chestBtnMaxY = 159.0f;
+        if (mousePos.x > chestBtnMinX && mousePos.x < chestBtnMaxX && 
+            mousePos.y > chestBtnMinY && mousePos.y < chestBtnMaxY) {
+            LOG_DEBUG("進入寶箱畫面！");
+            m_CurrentState = State::CHEST; 
+        }
+    }
+
+    // 🌟 繪製寶石與金幣 (在畫面上方)
+    if (m_GemText) {
+        // 設定寶石數值與位置
+        m_GemText->SetText(std::to_string(m_GemCount));
+        Core::Matrices gemData;
+        glm::vec2 size = m_GemText->GetSize();
+        // 座標微調：請根據畫面背景的圖示位置微調 X 和 Y
+        gemData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(-60.0f, 340.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        gemData.m_Projection = sharedProjection;
+        m_GemText->Draw(gemData);
+    }
+
+    if (m_GoldText) {
+        // 設定金幣數值與位置
+        m_GoldText->SetText(std::to_string(m_GoldCount));
+        Core::Matrices goldData;
+        glm::vec2 size = m_GoldText->GetSize();
+        // 座標微調：請根據畫面背景的圖示位置微調 X 和 Y
+        goldData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(135.0f, 340.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        goldData.m_Projection = sharedProjection;
+        m_GoldText->Draw(goldData);
     }
 
     if (Util::Input::IsKeyUp(Util::Keycode::ESCAPE) || Util::Input::IfExit()) {
@@ -233,8 +282,8 @@ void App::Backpack() {
                 float currentX = activeStartX + (i * activeGapX);
                 
                 // 🌟 把判定範圍從 30 放大到 45，確保隨便點都能點中格子
-                if (mousePos.x > currentX - 45.0f && mousePos.x < currentX + 45.0f &&
-                    mousePos.y > activeY - 45.0f && mousePos.y < activeY + 45.0f) {
+                if (mousePos.x > currentX - 20.0f && mousePos.x < currentX + 20.0f &&
+                    mousePos.y > activeY - 20.0f && mousePos.y < activeY + 20.0f) {
                     
                     clickedValidSlot = true;
                     DiceType selectedType = m_OwnedDiceTypes[m_SelectedInventoryIndex];
@@ -439,6 +488,29 @@ void App::Backpack() {
             m_AllDiceIcons[m_SelectedInventoryIndex]->Draw(iconData);
         }
     }
+
+    // 🌟 繪製寶石與金幣 (在畫面上方)
+    if (m_GemText) {
+        // 設定寶石數值與位置
+        m_GemText->SetText(std::to_string(m_GemCount));
+        Core::Matrices gemData;
+        glm::vec2 size = m_GemText->GetSize();
+        // 座標微調：請根據畫面背景的圖示位置微調 X 和 Y
+        gemData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(-60.0f, 340.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        gemData.m_Projection = sharedProjection;
+        m_GemText->Draw(gemData);
+    }
+
+    if (m_GoldText) {
+        // 設定金幣數值與位置
+        m_GoldText->SetText(std::to_string(m_GoldCount));
+        Core::Matrices goldData;
+        glm::vec2 size = m_GoldText->GetSize();
+        // 座標微調：請根據畫面背景的圖示位置微調 X 和 Y
+        goldData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(135.0f, 340.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        goldData.m_Projection = sharedProjection;
+        m_GoldText->Draw(goldData);
+    }
     
     // --- 離開與返回邏輯 ---
     // 1. 按下 ESC 鍵，回到主選單
@@ -455,6 +527,34 @@ void App::Backpack() {
 
 void App::InitGame(bool isEndlessMode) {
     m_IsEndlessMode = isEndlessMode;
+
+    // 🌟 【重大修復】進入新遊戲前，務必清空上一場殘留的物件與狀態！
+    m_Monsters.clear();
+    m_Bullets.clear();
+
+    m_PowerUpIcons.clear();
+    m_PowerUpCostTexts.clear();
+    m_PipCountTexts.clear();
+    for (int r = 0; r < 3; r++) {
+        for (int c = 0; c < 5; c++) {
+            m_Board[r][c] = nullptr;
+        }
+    }
+    
+    // 重置所有遊戲數值
+    m_CurrentWave = 1;
+    m_CurrentNormalHp = 100;
+    m_PlayerHp = 3;
+    m_SmallMonsterSpawnCount = 0;
+    m_MonstersSpawnedThisWave = 0;
+    m_IsSpawningWave = true;
+    m_WaveDelayTimer = 0.0f;
+    m_WaveSpawnTimer = 1.0f;
+    m_SpCost = 10;
+    for (int i = 0; i < 5; i++) {
+        m_PowerUpLevels[i] = 1;
+        m_PowerUpCosts[i] = 100;
+    }
     
     // 無限模式 100 SP 開局，練習模式給 10000 爽玩
     m_CurrentSp = m_IsEndlessMode ? 100 : 10000;
@@ -465,6 +565,7 @@ void App::InitGame(bool isEndlessMode) {
     m_SpBarImage = std::make_shared<Util::Image>(RESOURCE_DIR "/SP.png");
     m_SpTotalText = std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 20, std::to_string(m_CurrentSp), Util::Color::FromName(Util::Colors::BLACK));
     m_SpLevelIcon = std::make_shared<Util::Image>(RESOURCE_DIR "/SP_Levels.png");
+    m_SilenceIcon = std::make_shared<Util::Image>(RESOURCE_DIR "/BOSS/Silence/boss_silence.png");
 
     // 🌟 新增載入血量 UI 圖片
     m_HpImage = std::make_shared<Util::Image>(RESOURCE_DIR "/HP.png");
@@ -476,9 +577,20 @@ void App::InitGame(bool isEndlessMode) {
 
     InitializeWaypoints();
 
-    std::vector<std::string> deckNames = {"Ice", "Poison", "Wind", "Electric", "Iron"};
+    
     for(int i = 0; i < 5; i++) {
-        std::string path = RESOURCE_DIR "/" + deckNames[i] + "/" + deckNames[i] + "_Level_1.png";
+        std::string diceName = "";
+        
+        // 根據目前出戰的骰子種類，動態決定要讀取哪個資料夾的圖片
+        switch (m_CurrentDeck[i]) {
+            case DiceType::Ice:      diceName = "Ice";      break;
+            case DiceType::Poison:   diceName = "Poison";   break;
+            case DiceType::Wind:     diceName = "Wind";     break;
+            case DiceType::Electric: diceName = "Electric"; break;
+            case DiceType::Iron:     diceName = "Iron";     break;
+        }
+
+        std::string path = RESOURCE_DIR "/" + diceName + "/" + diceName + "_Level_1.png";
         m_PowerUpIcons.push_back(std::make_shared<Util::Image>(path));
         m_PowerUpCostTexts.push_back(std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 20, "100", Util::Color::FromName(Util::Colors::WHITE)));
         m_PipCountTexts.push_back(std::make_shared<Util::Text>(RESOURCE_DIR "/fonts/jf-openhuninn-2.1.ttf", 22, "0", Util::Color::FromName(Util::Colors::BLACK)));
@@ -542,13 +654,25 @@ void App::SpawnMonsters() {
                 int bossHp = static_cast<int>(m_CurrentNormalHp * 10 * hpMultiplier);
                 
                 int bossEncounter = m_CurrentWave / 10;
-                std::string bossImagePath = (bossEncounter % 2 == 1) ? 
-                    RESOURCE_DIR "/BOSS/Snake/boss_snake.png" : 
-                    RESOURCE_DIR "/BOSS/Silence/boss_silence.png";
-                    
+                std::string bossImagePath;
+                std::shared_ptr<Monster> boss = nullptr;
+                
+                if (bossEncounter % 3 == 1) {
+                    bossImagePath = RESOURCE_DIR "/BOSS/Snake/boss_snake.png";
+                    boss = std::make_shared<Monster>(bossImagePath, m_MonsterWaypoints, 0.5f, bossHp, baseSp * 20);
+                    boss->SetBoss(BossType::Snake, 2.0f, 10.0f); // 🌟 蛇王：進場2秒放招，冷卻10秒
+                } else if (bossEncounter % 3 == 2) {
+                    bossImagePath = RESOURCE_DIR "/BOSS/Silence/boss_silence.png";
+                    boss = std::make_shared<Monster>(bossImagePath, m_MonsterWaypoints, 0.5f, bossHp, baseSp * 20);
+                    boss->SetBoss(BossType::Silence, 2.0f, 7.0f); // 🌟 沉默：進場2秒放招，冷卻7秒
+                } else {
+                    bossImagePath = RESOURCE_DIR "/BOSS/Knights/boss_knights.png";
+                    boss = std::make_shared<Monster>(bossImagePath, m_MonsterWaypoints, 0.5f, bossHp, baseSp * 20);
+                    boss->SetBoss(BossType::Knights, 2.0f, 10.0f); // 🌟 騎士：進場2秒放招，冷卻10秒
+                }
 
                 // BOSS 給 20 倍 SP
-                auto boss = std::make_shared<Monster>(bossImagePath, m_MonsterWaypoints, 0.5f, bossHp, baseSp * 20);
+                
                 boss->SetSize(glm::vec2(75.0f, 75.0f));
                 m_Monsters.push_back(boss);
 
@@ -673,9 +797,16 @@ void App::Update() {
                         }
                     }
 
-                    std::vector<std::string> deckNames = {"Ice", "Poison", "Wind", "Electric", "Iron"};
+                    std::string diceName = "";
+                    switch (m_CurrentDeck[i]) {
+                        case DiceType::Ice:      diceName = "Ice";      break;
+                        case DiceType::Poison:   diceName = "Poison";   break;
+                        case DiceType::Wind:     diceName = "Wind";     break;
+                        case DiceType::Electric: diceName = "Electric"; break;
+                        case DiceType::Iron:     diceName = "Iron";     break;
+                    }
                     std::string levelStr = (m_PowerUpLevels[i] == 5) ? "max" : std::to_string(m_PowerUpLevels[i]);
-                    std::string newPath = RESOURCE_DIR "/" + deckNames[i] + "/" + deckNames[i] + "_Level_" + levelStr + ".png";
+                    std::string newPath = RESOURCE_DIR "/" + diceName + "/" + diceName + "_Level_" + levelStr + ".png";
                     m_PowerUpIcons[i] = std::make_shared<Util::Image>(newPath);
 
                     if (m_PowerUpLevels[i] == 2) m_PowerUpCosts[i] = 200;
@@ -701,7 +832,7 @@ void App::Update() {
 
     if (!m_IsDragging && (Util::Input::IsKeyDown(Util::Keycode::MOUSE_LB) || Util::Input::IsKeyPressed(Util::Keycode::MOUSE_LB))) {
         int r, c;
-        if (GetGridIndex(mousePos, r, c) && m_Board[r][c] != nullptr) {
+        if (GetGridIndex(mousePos, r, c) && m_Board[r][c] != nullptr && !m_Board[r][c]->IsSilenced()) {
             m_IsDragging = true;
             m_DragStartRow = r; m_DragStartCol = c;
         }
@@ -758,32 +889,145 @@ void App::Update() {
         m_PipCountTexts[i]->SetText(std::to_string(pipCounts[i]));
     }
 
+    std::vector<std::shared_ptr<Monster>> newSummonedMonsters;
     // 🌟 替換成新的怪物生命週期判定
     for (auto it = m_Monsters.begin(); it != m_Monsters.end(); ) {
     (*it)->Update(); 
-    
-    if ((*it)->IsFinished()) {
-        // 怪物走到終點，扣一點血並移除怪物
-        m_PlayerHp--;
-        it = m_Monsters.erase(it);
-        
-        // 可選：如果你希望血量歸零就結束遊戲，可以加上這行
-        // if (m_PlayerHp <= 0) m_CurrentState = State::END;
-    } 
-    else if ((*it)->IsDead()) {
-            // 🌟 怪物死亡，發放 SP
+
+    // ==========================================
+        // 🌟 BOSS 技能發動判定
+        // ==========================================
+        if ((*it)->PopSkillTrigger()) {
+            BossType type = (*it)->GetBossType();
             
-            m_CurrentSp += (*it)->GetSpReward();
-            if (m_SpTotalText) {
-                m_SpTotalText->SetText(std::to_string(m_CurrentSp));
+            if (type == BossType::Snake) {
+                LOG_DEBUG("蛇王發動技能！召喚小兵");
+                float hpMult = std::pow(1.1f, (m_CurrentWave - 1) / 10);
+                int normalHp = static_cast<int>(m_CurrentNormalHp * hpMult);
+                int baseSp = 10 + ((m_CurrentWave - 1) / 5) * 10;
+                
+                // Lambda 小幫手：生成並設定位置在蛇王腳下
+                auto spawnMob = [&](std::string path, float speed, int hp, int sp) {
+                    auto mob = std::make_shared<Monster>(path, m_MonsterWaypoints, speed, hp, sp);
+                    mob->SetSpawnState((*it)->GetPos(), (*it)->GetWaypointIndex());
+                    return mob;
+                };
+
+                newSummonedMonsters.push_back(spawnMob(RESOURCE_DIR "/monster/4.png", 1.5f, normalHp * 5, baseSp * 5)); // 小王
+                newSummonedMonsters.push_back(spawnMob(RESOURCE_DIR "/monster/3.png", 3.0f, normalHp, baseSp * 2));     // 快怪
+                newSummonedMonsters.push_back(spawnMob(RESOURCE_DIR "/monster/2.png", 1.5f, normalHp, baseSp));         // 普怪1
+                newSummonedMonsters.push_back(spawnMob(RESOURCE_DIR "/monster/2.png", 1.5f, normalHp, baseSp));         // 普怪2
             }
+            else if (type == BossType::Silence) {
+                LOG_DEBUG("沉默王發動技能！沉默隨機骰子");
+                std::vector<std::pair<int, int>> validTargets;
+                for (int r = 0; r < 3; r++) {
+                    for (int c = 0; c < 5; c++) {
+                        if (m_Board[r][c] != nullptr && !m_Board[r][c]->IsSilenced()) validTargets.push_back({r, c});
+                    }
+                }
+                // 隨機打亂並挑選 2 顆
+                std::random_device rd;
+                std::mt19937 g(rd());
+                std::shuffle(validTargets.begin(), validTargets.end(), g);
+                
+                int count = 0;
+                for (auto& target : validTargets) {
+                    m_Board[target.first][target.second]->SetSilenced(true);
+                    if (++count >= 2) break;
+                }
+            }
+            else if (type == BossType::Knights) {
+                LOG_DEBUG("騎士王發動技能！全盤洗牌");
+                for (int r = 0; r < 3; r++) {
+                    for (int c = 0; c < 5; c++) {
+                        if (m_Board[r][c] != nullptr) {
+                            int stars = m_Board[r][c]->GetStarLevel();
+                            glm::vec2 pos = m_Board[r][c]->GetPos();
+                            
+                            DiceType newType = m_CurrentDeck[rand() % 5];
+                            std::shared_ptr<Dice> newDice = nullptr;
+                            switch (newType) {
+                                case DiceType::Ice: newDice = std::make_shared<IceDice>(pos); break;
+                                case DiceType::Poison: newDice = std::make_shared<PoisonDice>(pos); break;
+                                case DiceType::Wind: newDice = std::make_shared<WindDice>(pos); break;
+                                case DiceType::Electric: newDice = std::make_shared<ElectricDice>(pos); break;
+                                case DiceType::Iron: newDice = std::make_shared<IronDice>(pos); break;
+                            }
+                            
+                            // 繼承原本的星數
+                            for (int i = 1; i < stars; i++) newDice->UpgradeStar();
+                            
+                            // 繼承該新種類的全局等級
+                            int typeIndex = 0;
+                            for(int i = 0; i < 5; i++) { if(m_CurrentDeck[i] == newType) { typeIndex = i; break; } }
+                            for (int i = 1; i < m_PowerUpLevels[typeIndex]; i++) newDice->PowerUp();
+                            
+                            m_Board[r][c] = newDice; // 直接覆蓋
+                        }
+                    }
+                }
+            }
+        }
+    
+        // ==========================================
+        // 🌟 怪物死亡與生命週期判定
+        // ==========================================
+        if ((*it)->IsFinished() || (*it)->IsDead()) {
             
-            it = m_Monsters.erase(it); 
-        } 
-        else {
+            if ((*it)->GetBossType() == BossType::Silence) {
+                for(int r = 0; r < 3; r++) {
+                    for(int c = 0; c < 5; c++) {
+                        if (m_Board[r][c]) m_Board[r][c]->SetSilenced(false);
+                    }
+                }
+            }
+
+            if ((*it)->IsFinished()) {
+                if (m_PlayerHp > 0) {
+                    m_PlayerHp--;
+                }
+                
+                it = m_Monsters.erase(it); 
+                
+                if (m_IsEndlessMode && m_PlayerHp <= 0) {
+                    if (m_GameOverWaveText) {
+                        m_GameOverWaveText->SetText(u8"回合 "+ std::to_string(m_CurrentWave));
+                    }
+                    
+                    int cardsEarned = 0;
+                    for (int i = 1; i <= m_CurrentWave; i++) {
+                        if (i % 10 == 0) {
+                            cardsEarned += 6; 
+                        } else if (i % 5 == 0) {
+                            cardsEarned += 2; 
+                        } else {
+                            cardsEarned += 1; 
+                        }
+                    }
+
+                    if (m_GameOverCardText) {
+                        m_GameOverCardText->SetText("+" + std::to_string(cardsEarned));
+                    }
+                    
+                    // 🌟 儲存卡片數量
+                    m_TotalCards += cardsEarned; 
+                    LOG_DEBUG("目前總卡片數量：{}", m_TotalCards);
+
+                    m_CurrentState = State::GAMEOVER;
+                }
+            } else {
+                m_CurrentSp += (*it)->GetSpReward();
+                if (m_SpTotalText) m_SpTotalText->SetText(std::to_string(m_CurrentSp));
+                it = m_Monsters.erase(it); 
+            }
+        } else {
             ++it; 
         }
-    }
+    } 
+
+    // 將蛇王召喚出來的小怪正式加入場上
+    m_Monsters.insert(m_Monsters.end(), newSummonedMonsters.begin(), newSummonedMonsters.end());
 
     for (int r = 0; r < 3; r++) {
         for (int c = 0; c < 5; c++) {
@@ -885,7 +1129,19 @@ void App::Update() {
     for (auto& bullet : m_Bullets) bullet->Draw(sharedProjection); 
     for (int r = 0; r < 3; r++) {
         for (int c = 0; c < 5; c++) {
-            if (m_Board[r][c] != nullptr && !(m_IsDragging && r == m_DragStartRow && c == m_DragStartCol)) m_Board[r][c]->Draw(sharedProjection);
+            // 🌟 加上大括號 {，把畫骰子跟畫沉默圖示包在一起！
+            if (m_Board[r][c] != nullptr && !(m_IsDragging && r == m_DragStartRow && c == m_DragStartCol)) {
+                
+                m_Board[r][c]->Draw(sharedProjection);
+
+                if (m_Board[r][c]->IsSilenced() && m_SilenceIcon) {
+                    Core::Matrices overlayData;
+                    overlayData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(m_Board[r][c]->GetPos(), 0.96f)), glm::vec3(70.0f, 70.0f, 1.0f));
+                    overlayData.m_Projection = sharedProjection;
+                    m_SilenceIcon->Draw(overlayData);
+                }
+                
+            }
         }
     }
     if (m_SummonBtn) m_SummonBtn->Draw(sharedProjection);
@@ -1000,8 +1256,40 @@ void App::Update() {
         if (Util::Input::IsKeyUp(Util::Keycode::M)) {
             for (int r = 0; r < 3; r++) { for (int c = 0; c < 5; c++) m_Board[r][c] = nullptr; }
         }
-    }
 
+        if (Util::Input::IsKeyUp(Util::Keycode::Z) || 
+            Util::Input::IsKeyUp(Util::Keycode::X) || 
+            Util::Input::IsKeyUp(Util::Keycode::C)) {
+            
+            float hpMultiplier = std::pow(1.1f, (m_CurrentWave - 1) / 10);
+            int bossHp = static_cast<int>(m_CurrentNormalHp * 10 * hpMultiplier);
+            int baseSp = 10 + ((m_CurrentWave - 1) / 5) * 10;
+            if (baseSp > 50) baseSp = 50;
+
+            std::string bossPath;
+            std::shared_ptr<Monster> boss = nullptr; // 🌟 補上這行宣告！
+
+            if (Util::Input::IsKeyUp(Util::Keycode::Z)) {
+                bossPath = RESOURCE_DIR "/BOSS/Snake/boss_snake.png";
+                boss = std::make_shared<Monster>(bossPath, m_MonsterWaypoints, 0.5f, bossHp, baseSp * 20);
+                boss->SetBoss(BossType::Snake, 2.0f, 10.0f);
+            } else if (Util::Input::IsKeyUp(Util::Keycode::X)) {
+                bossPath = RESOURCE_DIR "/BOSS/Silence/boss_silence.png";
+                boss = std::make_shared<Monster>(bossPath, m_MonsterWaypoints, 0.5f, bossHp, baseSp * 20);
+                boss->SetBoss(BossType::Silence, 2.0f, 7.0f);
+            } else if (Util::Input::IsKeyUp(Util::Keycode::C)) {
+                bossPath = RESOURCE_DIR "/BOSS/Knights/boss_knights.png";
+                boss = std::make_shared<Monster>(bossPath, m_MonsterWaypoints, 0.5f, bossHp, baseSp * 20);
+                boss->SetBoss(BossType::Knights, 2.0f, 10.0f);
+            }
+
+            if (boss) {
+                boss->SetSize(glm::vec2(75.0f, 75.0f));
+                m_Monsters.push_back(boss);
+            }
+        }
+    }
+    
     // --- 離開與返回邏輯 ---
     // 1. 按下 ESC 鍵，回到主選單
     if (Util::Input::IsKeyUp(Util::Keycode::ESCAPE)) {
@@ -1013,5 +1301,276 @@ void App::Update() {
         m_CurrentState = State::END;  
     }
 }
+
+void App::GameOver() {
+    glm::mat4 sharedProjection = glm::ortho(-960.0f, 960.0f, -540.0f, 540.0f, -1.0f, 2.0f);
+
+    if (m_GameOverImage) {
+        Core::Matrices bgData;
+        bgData.m_Model = glm::scale(glm::mat4(1.0f), glm::vec3(960.0f, 960.0f, 1.0f)); 
+        bgData.m_Projection = sharedProjection;
+        m_GameOverImage->Draw(bgData);
+    }
+
+    // --- 🌟 1. 繪製 WAVE 文字 (發光中心點) ---
+    if (m_GameOverWaveText) {
+        Core::Matrices waveData;
+        glm::vec2 size = m_GameOverWaveText->GetSize();
+        // 座標微調：X為0(置中)，Y大約在中心發光處上方一點
+        waveData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 55.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        waveData.m_Projection = sharedProjection;
+        m_GameOverWaveText->Draw(waveData);
+    }
+
+    // --- 🌟 2. 繪製卡片獲得數量 (小卡片圖示旁邊) ---
+    if (m_GameOverCardText) {
+        Core::Matrices cardData;
+        glm::vec2 size = m_GameOverCardText->GetSize();
+        // 座標微調：X稍微往右移避開卡片圖示，Y大概在卡片圖示的高度
+        cardData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(35.0f, -10.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        cardData.m_Projection = sharedProjection;
+        m_GameOverCardText->Draw(cardData);
+    }
+
+    // --- 🌟 3. 繪製出戰的骰子陣容 (深藍色框框內) ---
+    float diceStartX = -145.0f; 
+    float diceGapX = 74.0f;     
+    float diceY = -110.0f; // 💡 這個 Y 座標是我抓深藍色框的預估值，如果有偏上或偏下請微調這個數字！
+    
+    for (int i = 0; i < 5; i++) {
+        float currentX = diceStartX + (i * diceGapX);
+        if (i < m_ActiveDeckIcons.size() && m_ActiveDeckIcons[i]) {
+            Core::Matrices iconData;
+            iconData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(currentX, diceY, 0.95f)), glm::vec3(60.0f, 60.0f, 1.0f));
+            iconData.m_Projection = sharedProjection;
+            m_ActiveDeckIcons[i]->Draw(iconData);
+        }
+    }
+
+    // --- 離開與返回邏輯 ---
+    if (Util::Input::IsKeyUp(Util::Keycode::ESCAPE)) {
+        m_CurrentState = State::MENU; 
+    }
+    // 🌟 新增：點擊滑鼠左鍵判定黃色「確認」按鈕
+    if (Util::Input::IsKeyUp(Util::Keycode::MOUSE_LB)) {
+        glm::vec2 mousePos = Util::Input::GetCursorPosition();
+        
+        // 幫你印出滑鼠座標，如果下面預估的按鈕範圍不夠精準，你可以看終端機微調！
+        LOG_DEBUG("結算畫面點擊座標 -> X: {}, Y: {}", mousePos.x, mousePos.y);
+
+        // 💡 預估黃色「確認」按鈕的範圍
+        float confirmBtnMinX = -57.0f; 
+        float confirmBtnMaxX = 57.0f;  
+        float confirmBtnMinY = -235.0f; 
+        float confirmBtnMaxY = -190.0f; 
+
+        if (mousePos.x > confirmBtnMinX && mousePos.x < confirmBtnMaxX &&
+            mousePos.y > confirmBtnMinY && mousePos.y < confirmBtnMaxY) {
+            
+            LOG_DEBUG("點擊了確認按鈕，返回主選單！");
+            m_CurrentState = State::MENU; 
+        }
+    }
+    if (Util::Input::IfExit()) {
+        m_CurrentState = State::END;  
+    }
+}
+
+void App::Chest() {
+    glm::mat4 sharedProjection = glm::ortho(-960.0f, 960.0f, -540.0f, 540.0f, -1.0f, 2.0f);
+
+    // 1. 繪製寶箱背景
+    if (m_ChestBgImage) {
+        Core::Matrices bgData;
+        bgData.m_Model = glm::scale(glm::mat4(1.0f), glm::vec3(960.0f, 960.0f, 1.0f)); 
+        bgData.m_Projection = sharedProjection;
+        m_ChestBgImage->Draw(bgData);
+    }
+
+    // 🌟 2. 繪製左側：目前卡片進度 (XX/40)
+    if (m_ChestCardText) {
+        m_ChestCardText->SetText(std::to_string(m_TotalCards) + "/40");
+        Core::Matrices textData;
+        glm::vec2 size = m_ChestCardText->GetSize();
+        // 💡 預估座標：靠左一點，箭頭的左邊
+        textData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(-80.0f, 8.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        textData.m_Projection = sharedProjection;
+        m_ChestCardText->Draw(textData);
+    }
+
+    // 🌟 3. 繪製右側：可開箱數量
+    if (m_ChestCountText) {
+        m_ChestCountText->SetText(std::to_string(m_TotalCards / 40));
+        Core::Matrices textData;
+        glm::vec2 size = m_ChestCountText->GetSize();
+        // 💡 預估座標：靠右一點，寶箱圖案的旁邊
+        textData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(148.0f, 13.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        textData.m_Projection = sharedProjection;
+        m_ChestCountText->Draw(textData);
+    }
+
+    // --- 🌟 點擊判定邏輯 ---
+    if (Util::Input::IsKeyUp(Util::Keycode::MOUSE_LB)) {
+        glm::vec2 mousePos = Util::Input::GetCursorPosition();
+        LOG_DEBUG("寶箱畫面點擊 -> X: {}, Y: {}", mousePos.x, mousePos.y);
+
+        // 判定 A：點擊下方黃色「開啟」按鈕
+        float openBtnMinX = -50.0f; float openBtnMaxX = 50.0f;
+        float openBtnMinY = -185.0f; float openBtnMaxY = -150.0f;
+        
+        if (mousePos.x > openBtnMinX && mousePos.x < openBtnMaxX &&
+            mousePos.y > openBtnMinY && mousePos.y < openBtnMaxY) {
+            
+            if (m_TotalCards >= 40) {
+                m_TotalCards -= 40; // 扣除 40 張卡片
+                static bool seeded = false;
+                if (!seeded) { srand(static_cast<unsigned int>(time(NULL))); seeded = true; }
+                m_OpenedDiceIndex = rand() % 5;
+                m_CurrentState = State::OPEN; // 跳轉到開啟畫面
+                LOG_DEBUG("開啟寶箱！剩餘卡片: {}", m_TotalCards);
+            } else {
+                LOG_DEBUG("卡片不足 40 張，無法開啟！");
+            }
+        }
+
+        // 判定 B：點擊右上角 X 關閉視窗
+        float closeBtnMinX = 95.0f; float closeBtnMaxX = 123.0f;
+        float closeBtnMinY = 180.0f; float closeBtnMaxY = 206.0f;
+        
+        if (mousePos.x > closeBtnMinX && mousePos.x < closeBtnMaxX &&
+            mousePos.y > closeBtnMinY && mousePos.y < closeBtnMaxY) {
+            m_CurrentState = State::MENU; 
+        }
+    }
+
+    if (Util::Input::IsKeyUp(Util::Keycode::ESCAPE)) {
+        m_CurrentState = State::MENU; 
+    }
+    if (Util::Input::IfExit()) {
+        m_CurrentState = State::END;  
+    }
+}
+
+// 🌟 新增：OPEN 畫面的基礎骨架
+void App::Open() {
+    glm::mat4 sharedProjection = glm::ortho(-960.0f, 960.0f, -540.0f, 540.0f, -1.0f, 2.0f);
+
+    // 1. 繪製開箱背景
+    if (m_OpenBgImage) {
+        Core::Matrices bgData;
+        bgData.m_Model = glm::scale(glm::mat4(1.0f), glm::vec3(960.0f, 960.0f, 1.0f)); 
+        bgData.m_Projection = sharedProjection;
+        m_OpenBgImage->Draw(bgData);
+    }
+
+    // 2. 繪製置中的普通底卡 (Ordinary_dice.png)
+    if (m_OrdinaryTagImage) {
+        Core::Matrices tagData;
+        tagData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 146.0f, 0.95f)), glm::vec3(100.0f, 100.0f, 1.0f));
+        tagData.m_Projection = sharedProjection;
+        m_OrdinaryTagImage->Draw(tagData);
+    }
+
+    // 3. 繪製抽到的骰子圖示 (疊在底卡上)
+    if (m_AllDiceIcons[m_OpenedDiceIndex]) {
+        Core::Matrices diceData;
+        diceData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 90.0f, 0.96f)), glm::vec3(80.0f, 80.0f, 1.0f));
+        diceData.m_Projection = sharedProjection;
+        m_AllDiceIcons[m_OpenedDiceIndex]->Draw(diceData);
+    }
+
+    // 4. 繪製 x100 (骰子右下方) 與 名稱 (骰子正下方)
+    if (m_OpenDiceCountText) {
+        Core::Matrices countData;
+        glm::vec2 size = m_OpenDiceCountText->GetSize();
+        countData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(45.0f, 55.0f, 0.97f)), glm::vec3(size.x, size.y, 1.0f));
+        countData.m_Projection = sharedProjection;
+        m_OpenDiceCountText->Draw(countData);
+    }
+
+    std::string nameStr = "";
+    switch(m_OpenedDiceIndex) {
+        case 0: nameStr = u8"冰骰子"; break;
+        case 1: nameStr = u8"毒骰子"; break;
+        case 2: nameStr = u8"風骰子"; break;
+        case 3: nameStr = u8"電骰子"; break;
+        case 4: nameStr = u8"鐵骰子"; break;
+    }
+    if (m_OpenDiceNameText) {
+        m_OpenDiceNameText->SetText(nameStr);
+        Core::Matrices nameData;
+        glm::vec2 size = m_OpenDiceNameText->GetSize();
+        nameData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(10.0f, 30.0f, 0.97f)), glm::vec3(size.x, size.y, 1.0f));
+        nameData.m_Projection = sharedProjection;
+        m_OpenDiceNameText->Draw(nameData);
+    }
+
+    // 5. 繪製寶石 (3) 與 金幣 (2000)
+    if (m_OpenGemText) {
+        Core::Matrices textData;
+        glm::vec2 size = m_OpenGemText->GetSize();
+        textData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(-39.0f, -26.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        textData.m_Projection = sharedProjection;
+        m_OpenGemText->Draw(textData);
+    }
+    if (m_OpenGoldText) {
+        Core::Matrices textData;
+        glm::vec2 size = m_OpenGoldText->GetSize();
+        textData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(84.0f, -26.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        textData.m_Projection = sharedProjection;
+        m_OpenGoldText->Draw(textData);
+    }
+
+    // 6. 繪製剩餘卡片進度 (XXX / 40)
+    if (m_OpenCardText) {
+        m_OpenCardText->SetText(std::to_string(m_TotalCards) + " / 40");
+        Core::Matrices textData;
+        glm::vec2 size = m_OpenCardText->GetSize();
+        // 對齊藍色按鈕上方
+        textData.m_Model = glm::scale(glm::translate(glm::mat4(1.0f), glm::vec3(110.0f, -150.0f, 0.95f)), glm::vec3(size.x, size.y, 1.0f));
+        textData.m_Projection = sharedProjection;
+        m_OpenCardText->Draw(textData);
+    }
+
+    // --- 🌟 點擊判定邏輯 ---
+    if (Util::Input::IsKeyUp(Util::Keycode::MOUSE_LB)) {
+        glm::vec2 mousePos = Util::Input::GetCursorPosition();
+        LOG_DEBUG("Open Screen Click -> X: " + std::to_string(mousePos.x) + ", Y: " + std::to_string(mousePos.y));
+
+        // 判定 A：黃色「確認」按鈕 (左) -> 回到寶箱畫面
+        float confirmBtnMinX = -117.0f; float confirmBtnMaxX = -19.0f;
+        float confirmBtnMinY = -150.0f; float confirmBtnMaxY = -115.0f;
+        
+        if (mousePos.x > confirmBtnMinX && mousePos.x < confirmBtnMaxX &&
+            mousePos.y > confirmBtnMinY && mousePos.y < confirmBtnMaxY) {
+            m_CurrentState = State::CHEST; 
+        }
+
+        // 判定 B：藍色「再開一次」按鈕 (右) -> 直接連抽
+        float againBtnMinX = 16.0f;  float againBtnMaxX = 113.0f;
+        float againBtnMinY = -150.0f; float againBtnMaxY = -115.0f;
+        
+        if (mousePos.x > againBtnMinX && mousePos.x < againBtnMaxX &&
+            mousePos.y > againBtnMinY && mousePos.y < againBtnMaxY) {
+            
+            if (m_TotalCards >= 40) {
+                m_TotalCards -= 40;
+                m_OpenedDiceIndex = rand() % 5; // 再抽一顆新的
+                LOG_DEBUG("再開一次！抽到新骰子");
+            } else {
+                LOG_DEBUG("卡片不足，無法再開！");
+            }
+        }
+    }
+
+    if (Util::Input::IsKeyUp(Util::Keycode::ESCAPE)) {
+        m_CurrentState = State::CHEST; 
+    }
+    if (Util::Input::IfExit()) {
+        m_CurrentState = State::END;  
+    }
+}
+
+
 
 void App::End() { LOG_TRACE("End"); }

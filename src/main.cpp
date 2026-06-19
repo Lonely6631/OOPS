@@ -18,11 +18,23 @@ int main(int, char**) {
             case App::State::BACKPACK: // 新增 BACKPACK 狀態的處理
                 app.Backpack();
                 break;
-
+            
+            case App::State::GAMEOVER: //  新增處理結算畫面狀態
+                app.GameOver();
+                break;
+            
+            case App::State::CHEST:
+                app.Chest();
+                break;
+            
             case App::State::UPDATE:
                 app.Update();
                 break;
-
+            
+            case App::State::OPEN:
+                app.Open();
+                break; 
+               
             case App::State::END:
                 app.End();
                 context->SetExit(true);

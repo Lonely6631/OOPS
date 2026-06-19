@@ -45,13 +45,17 @@ public:
     virtual void UpgradeStar() { m_StarLevel++; }
     virtual void PowerUp() { m_PowerUpLevel++; }
 
+    void SetSilenced(bool s) { m_IsSilenced = s; }
+    bool IsSilenced() const { return m_IsSilenced; }
+
 protected:
     std::shared_ptr<Util::Image> m_Image;
     glm::vec2 m_Pos;
     float m_CooldownTimer = 0.0f; 
     DiceType m_Type; 
     int m_StarLevel;     
-    int m_PowerUpLevel;  
+    int m_PowerUpLevel;
+    bool m_IsSilenced = false;  
 
     std::shared_ptr<Monster> FindFrontMostMonster(const std::vector<std::shared_ptr<Monster>>& monsters) {
         std::shared_ptr<Monster> target = nullptr;
@@ -112,7 +116,8 @@ public:
     }
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
-        Dice::Update(monsters, bullets); 
+        Dice::Update(monsters, bullets);
+        if (m_IsSilenced) return; 
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
             std::shared_ptr<Monster> target = nullptr;
             int maxHp = -1;
@@ -145,6 +150,7 @@ public:
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
         Dice::Update(monsters, bullets); 
+        if (m_IsSilenced) return;
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
             std::shared_ptr<Monster> target = FindFrontMostMonster(monsters);
             if (target) {
@@ -177,6 +183,7 @@ public:
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
         Dice::Update(monsters, bullets); 
+        if (m_IsSilenced) return;
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
             std::shared_ptr<Monster> target = FindFrontMostMonster(monsters);
             if (target) {
@@ -204,6 +211,7 @@ public:
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
         Dice::Update(monsters, bullets); 
+        if (m_IsSilenced) return;
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
             std::shared_ptr<Monster> target = FindUnpoisonedFrontMostMonster(monsters);
             if (target) {
@@ -231,6 +239,7 @@ public:
 
     void Update(const std::vector<std::shared_ptr<Monster>>& monsters, std::vector<std::shared_ptr<Bullet>>& bullets) override {
         Dice::Update(monsters, bullets); 
+        if (m_IsSilenced) return;
         if (m_CooldownTimer <= 0.0f && !monsters.empty()) {
             std::shared_ptr<Monster> target = FindFrontMostMonster(monsters);
             if (target) {

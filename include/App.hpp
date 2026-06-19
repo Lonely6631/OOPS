@@ -13,12 +13,15 @@
 
 class App {
 public:
-    enum class State { START, MENU, BACKPACK, UPDATE, END }; 
+    enum class State { START, MENU, BACKPACK, GAMEOVER, UPDATE, CHEST, OPEN, END }; 
     State GetCurrentState() const { return m_CurrentState; }
     
     void Start();
     void Menu();   
-    void Backpack(); // 2. 新增 Backpack() 宣告
+    void Backpack(); 
+    void GameOver();
+    void Chest();
+    void Open();
     void Update();
     void End();
 
@@ -33,9 +36,15 @@ private:
     bool m_IsEndlessMode = false;
 
     State m_CurrentState = State::START;
+
+    int m_GemCount = 2000;    // 初始寶石
+    int m_GoldCount = 100000; // 初始金幣
+    std::shared_ptr<Util::Text> m_GemText;
+    std::shared_ptr<Util::Text> m_GoldText;
     
     std::shared_ptr<Util::Image> m_MainMenuImage; // 主選單圖片
     std::shared_ptr<Util::Image> m_BackpackImage;
+    std::shared_ptr<Util::Image> m_GameOverImage;
     std::shared_ptr<Util::Image> m_FrameOrdinary; // 普通骰子的底框
     std::vector<std::shared_ptr<Util::Image>> m_AllDiceIcons;// 為了在背包顯示，我們先準備一個陣列存放所有種類的 UI 圖片
 
@@ -75,6 +84,24 @@ private:
     std::vector<std::shared_ptr<Monster>> m_Monsters;
     std::vector<std::shared_ptr<Bullet>> m_Bullets;
     std::vector<glm::vec2> m_MonsterWaypoints;
+
+    std::shared_ptr<Util::Text> m_GameOverWaveText;
+    std::shared_ptr<Util::Text> m_GameOverCardText;
+    std::shared_ptr<Util::Image> m_SilenceIcon;
+
+    std::shared_ptr<Util::Image> m_ChestBgImage;
+    std::shared_ptr<Util::Image> m_OpenBgImage; 
+    int m_TotalCards = 400;
+    std::shared_ptr<Util::Text> m_ChestCardText;  // 顯示 "目前數量/40"
+    std::shared_ptr<Util::Text> m_ChestCountText; // 顯示 "X 數量"
+
+    std::shared_ptr<Util::Image> m_OrdinaryTagImage; // 普通骰子的底卡
+    std::shared_ptr<Util::Text> m_OpenDiceNameText;  // 骰子名稱
+    std::shared_ptr<Util::Text> m_OpenDiceCountText; // x100
+    std::shared_ptr<Util::Text> m_OpenGemText;       // 寶石數量
+    std::shared_ptr<Util::Text> m_OpenGoldText;      // 金幣數量
+    std::shared_ptr<Util::Text> m_OpenCardText;      // 剩餘卡片
+    int m_OpenedDiceIndex = 0;
     
     int m_CurrentSp = 10000;
     int m_SpCost = 10;

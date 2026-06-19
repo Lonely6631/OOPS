@@ -11,6 +11,8 @@
 #include <vector>
 #include <algorithm> 
 
+enum class BossType { None, Snake, Silence, Knights };
+
 class Monster {
 public:
     Monster(const std::string& imagePath, std::vector<glm::vec2> waypoints, float speed, int hp, int spReward = 0) 
@@ -20,7 +22,7 @@ public:
         
         m_IceSnowImage = std::make_shared<Util::Image>(RESOURCE_DIR "/Ice/Ice_snow.png");
         m_PoisonUI = std::make_shared<Util::Image>(RESOURCE_DIR "/Poison/Poison_UI.png");
-
+       
         if (!m_Waypoints.empty()) {
             m_Pos = m_Waypoints[0];
             m_CurrentWaypointIndex = 1; 
@@ -30,6 +32,30 @@ public:
         }
     }
 
+    // 🌟 設定 BOSS 屬性
+        void SetBoss(BossType type, float firstCast, float cooldown) {
+            m_BossType = type;
+            m_SkillTimer = firstCast;
+            m_SkillCooldown = cooldown;
+        }
+
+        // 🌟 讓 App 檢查是否要發動技能
+        bool PopSkillTrigger() {
+            if (m_TriggerSkill) {
+                m_TriggerSkill = false;
+                return true;
+            }
+            return false;
+        }
+        
+        BossType GetBossType() const { return m_BossType; }
+
+        // 🌟 用來讓蛇王召喚的小怪直接生在 BOSS 腳下
+        void SetSpawnState(glm::vec2 pos, size_t waypointIndex) {
+            m_Pos = pos;
+            m_CurrentWaypointIndex = waypointIndex;
+        }
+
     void SetSize(glm::vec2 size) { m_Size = size; }
 
     void Update() {
@@ -37,7 +63,6 @@ public:
 
         float deltaTime = static_cast<float>(Util::Time::GetDeltaTimeMs()) / 1000.0f;
         
-        // 🌟 使用動態的中毒傷害
         if (m_IsPoisoned) {
             m_PoisonTickTimer -= deltaTime;
             if (m_PoisonTickTimer <= 0.0f) {
@@ -54,15 +79,32 @@ public:
             }
         }
 
-        glm::vec2 targetPos = m_Waypoints[m_CurrentWaypointIndex];
-        glm::vec2 direction = targetPos - m_Pos;
-        float distance = glm::length(direction);
+        // 🌟 BOSS 技能計時與停頓邏輯
+        if (m_BossType != BossType::None) {
+            if (m_PauseTimer > 0.0f) {
+                m_PauseTimer -= deltaTime;
+            } else {
+                m_SkillTimer -= deltaTime;
+                if (m_SkillTimer <= 0.0f) {
+                    m_TriggerSkill = true;     // 觸發技能
+                    m_PauseTimer = 2.0f;       // 原地罰站 2 秒
+                    m_SkillTimer = m_SkillCooldown; // 重置冷卻
+                }
+            }
+        }
 
-        if (distance <= m_CurrentSpeed) {
-            m_Pos = targetPos;
-            m_CurrentWaypointIndex++; 
-        } else {
-            m_Pos += glm::normalize(direction) * m_CurrentSpeed;
+        // 🌟 只有在沒有被暫停 (施法) 的時候才移動
+        if (m_PauseTimer <= 0.0f) {
+            glm::vec2 targetPos = m_Waypoints[m_CurrentWaypointIndex];
+            glm::vec2 direction = targetPos - m_Pos;
+            float distance = glm::length(direction);
+
+            if (distance <= m_CurrentSpeed) {
+                m_Pos = targetPos;
+                m_CurrentWaypointIndex++; 
+            } else {
+                m_Pos += glm::normalize(direction) * m_CurrentSpeed;
+            }
         }
     }
 
@@ -165,6 +207,12 @@ private:
     bool m_IsPoisoned = false;
     float m_PoisonTickTimer = 0.0f;
     int m_PoisonDamage = 50; // 預設中毒傷害
+
+    BossType m_BossType = BossType::None;
+    float m_SkillTimer = 0.0f;
+    float m_SkillCooldown = 0.0f;
+    float m_PauseTimer = 0.0f;
+    bool m_TriggerSkill = false;
 };
 
 #endif
