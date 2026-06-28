@@ -855,12 +855,46 @@ void App::Update() {
                 auto targetDice = m_Board[targetR][targetC];
                 if (targetDice == nullptr) {
                     draggedDice->SetPos(GetTilePosition(m_DragStartRow, m_DragStartCol));
-                } else {
+                } 
+                else {
                     if (draggedDice->GetType() == targetDice->GetType() && draggedDice->GetStarLevel() == targetDice->GetStarLevel()) {
-                        targetDice->UpgradeStar();
-                        m_Board[m_DragStartRow][m_DragStartCol] = nullptr; 
-                        targetDice->SetPos(GetTilePosition(targetR, targetC)); 
-                    } else {
+                            int newStarLevel = targetDice->GetStarLevel() + 1; // 計算合成後的新星數
+                            glm::vec2 pos = GetTilePosition(targetR, targetC);
+
+                            // 1. 隨機從目前的 5 顆出戰骰子中挑選一種
+                            DiceType newType = m_CurrentDeck[rand() % 5];
+                            std::shared_ptr<Dice> newDice = nullptr;
+                            
+                            switch (newType) {
+                                case DiceType::Ice: newDice = std::make_shared<IceDice>(pos); break;
+                                case DiceType::Poison: newDice = std::make_shared<PoisonDice>(pos); break;
+                                case DiceType::Wind: newDice = std::make_shared<WindDice>(pos); break;
+                                case DiceType::Electric: newDice = std::make_shared<ElectricDice>(pos); break;
+                                case DiceType::Iron: newDice = std::make_shared<IronDice>(pos); break;
+                            }
+
+                            // 2. 繼承合成後的新星數 (初始為1星，所以升級 newStarLevel - 1 次)
+                            for (int i = 1; i < newStarLevel; i++) {
+                                newDice->UpgradeStar();
+                            }
+
+                            // 3. 繼承該骰子目前的全局強化等級 (PowerUp)
+                            int typeIndex = 0;
+                            for(int i = 0; i < 5; i++) { 
+                                if(m_CurrentDeck[i] == newType) { 
+                                    typeIndex = i; 
+                                    break; 
+                                } 
+                            }
+                            for (int i = 1; i < m_PowerUpLevels[typeIndex]; i++) {
+                                newDice->PowerUp();
+                            }
+
+                            // 4. 放置新骰子，並清空原本拖曳的位置
+                            m_Board[targetR][targetC] = newDice; 
+                            m_Board[m_DragStartRow][m_DragStartCol] = nullptr; 
+                        } 
+                    else {
                         draggedDice->SetPos(GetTilePosition(m_DragStartRow, m_DragStartCol));
                     }
                 }
@@ -1292,9 +1326,39 @@ void App::Update() {
     
     // --- 離開與返回邏輯 ---
     // 1. 按下 ESC 鍵，回到主選單
+    
     if (Util::Input::IsKeyUp(Util::Keycode::ESCAPE)) {
+        if (m_IsEndlessMode) {
+            // 無限模式：提前退出也要進行結算並發放卡片
+            if (m_GameOverWaveText) {
+                m_GameOverWaveText->SetText(u8"回合 "+ std::to_string(m_CurrentWave));
+            }
+            
+            int cardsEarned = 0;
+            for (int i = 1; i <= m_CurrentWave; i++) {
+                if (i % 10 == 0) {
+                    cardsEarned += 6; 
+                } else if (i % 5 == 0) {
+                    cardsEarned += 2; 
+                } else {
+                    cardsEarned += 1; 
+                }
+            }
+
+            if (m_GameOverCardText) {
+                m_GameOverCardText->SetText("+" + std::to_string(cardsEarned));
+            }
+            
+            m_TotalCards += cardsEarned; 
+            LOG_DEBUG("目前總卡片數量：{}", m_TotalCards);
+
+            m_CurrentState = State::GAMEOVER;
+        } 
+    else {
+        // 練習模式：直接回到主選單
         m_CurrentState = State::MENU; 
     }
+}
     
     // 2. 點擊視窗右上角的 X，直接結束程式
     if (Util::Input::IfExit()) {
@@ -1426,6 +1490,8 @@ void App::Chest() {
                 static bool seeded = false;
                 if (!seeded) { srand(static_cast<unsigned int>(time(NULL))); seeded = true; }
                 m_OpenedDiceIndex = rand() % 5;
+                m_GemCount += 3;      // 🌟 新增：實際獲得 3 顆寶石
+                m_GoldCount += 2000;  // 🌟 新增：實際獲得 2000 金幣
                 m_CurrentState = State::OPEN; // 跳轉到開啟畫面
                 LOG_DEBUG("開啟寶箱！剩餘卡片: {}", m_TotalCards);
             } else {
@@ -1556,6 +1622,8 @@ void App::Open() {
             if (m_TotalCards >= 40) {
                 m_TotalCards -= 40;
                 m_OpenedDiceIndex = rand() % 5; // 再抽一顆新的
+                m_GemCount += 3;      // 🌟 新增：連抽也要實際獲得 3 顆寶石
+                m_GoldCount += 2000;  // 🌟 新增：連抽也要實際獲得 2000 金幣
                 LOG_DEBUG("再開一次！抽到新骰子");
             } else {
                 LOG_DEBUG("卡片不足，無法再開！");
